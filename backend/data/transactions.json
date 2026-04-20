@@ -1,0 +1,13 @@
+[
+  {
+    "_id": "ed08d067-4634-4a65-926c-bd230d4b8484",
+    "userId": "0e14801a-75dc-47bb-a170-b0beddce20a9",
+    "title": "Shopping",
+    "amount": 100000,
+    "type": "expense",
+    "category": "Food & Dining",
+    "date": "2026-04-20T00:00:00.000Z",
+    "notes": "enilla\n",
+    "createdAt": "2026-04-20T15:09:51.297Z"
+  }
+]

@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
-const User = require('../models/User');
+const bcrypt = require('bcryptjs'); 
+const crypto = require('crypto');
+const { usersFile, readData, writeData } = require('../config/db');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -8,9 +10,6 @@ const generateToken = (id) => {
   });
 };
 
-// @desc    Register a new user
-// @route   POST /api/auth/register
-// @access  Public
 const register = async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -23,8 +22,9 @@ const register = async (req, res) => {
     }
 
     const { name, email, password } = req.body;
+    const users = await readData(usersFile);
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = users.find((u) => u.email === email.toLowerCase());
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -32,9 +32,21 @@ const register = async (req, res) => {
       });
     }
 
-    const user = await User.create({ name, email, password });
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    const token = generateToken(user._id);
+    const newUser = {
+      _id: crypto.randomUUID(),
+      name,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      createdAt: new Date().toISOString(),
+    };
+
+    users.push(newUser);
+    await writeData(usersFile, users);
+
+    const token = generateToken(newUser._id);
 
     res.status(201).json({
       success: true,
@@ -42,25 +54,19 @@ const register = async (req, res) => {
       data: {
         token,
         user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          createdAt: user.createdAt,
+          id: newUser._id,
+          name: newUser.name,
+          email: newUser.email,
+          createdAt: newUser.createdAt,
         },
       },
     });
   } catch (error) {
     console.error('Register error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error during registration.',
-    });
+    res.status(500).json({ success: false, message: 'Server error during registration.' });
   }
 };
 
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
 const login = async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -73,12 +79,11 @@ const login = async (req, res) => {
     }
 
     const { email, password } = req.body;
+    const users = await readData(usersFile);
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select(
-      '+password'
-    );
+    const user = users.find((u) => u.email === email.toLowerCase());
 
-    if (!user || !(await user.comparePassword(password))) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password.',
@@ -102,16 +107,10 @@ const login = async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error during login.',
-    });
+    res.status(500).json({ success: false, message: 'Server error during login.' });
   }
 };
 
-// @desc    Get current user profile
-// @route   GET /api/auth/me
-// @access  Private
 const getMe = async (req, res) => {
   try {
     res.status(200).json({
@@ -126,10 +125,7 @@ const getMe = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Server error.',
-    });
+    res.status(500).json({ success: false, message: 'Server error.' });
   }
 };
 
